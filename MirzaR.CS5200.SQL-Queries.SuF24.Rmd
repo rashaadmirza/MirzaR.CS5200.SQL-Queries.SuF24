@@ -84,13 +84,14 @@ LIMIT 10;
 ### 6. How many employees never worked with a single customer, i.e., they appear in the Employees table but not in the Orders table?
 
 ```{sql connection=dbcon}
-SELECT (CONCAT(e.FirstName, ' ', e.LastName)) AS EmployeesWithoutOrders, e.EmployeeID
+SELECT COUNT(e.EmployeeID) AS EmployeesWithoutOrders
 FROM Employees e
 LEFT JOIN Orders o ON e.EmployeeID = o.EmployeeID
 WHERE o.OrderID IS NULL;
 ```
+
 ```{sql connection=dbcon}
-SELECT COUNT(e.EmployeeID) AS EmployeesWithoutOrders
+SELECT (CONCAT(e.FirstName, ' ', e.LastName)) AS EmployeesWithoutOrders, e.EmployeeID
 FROM Employees e
 LEFT JOIN Orders o ON e.EmployeeID = o.EmployeeID
 WHERE o.OrderID IS NULL;
@@ -99,12 +100,13 @@ WHERE o.OrderID IS NULL;
 ### 7. How many products contain either "Caviar" or "Kaviar" in the name of the product?
 
 ```{sql connection=dbcon}
-SELECT *
+SELECT COUNT(*) AS ProductCount
 FROM Products
 WHERE LOWER(ProductName) LIKE '%caviar%' OR LOWER(ProductName) LIKE '%kaviar%';
 ```
+
 ```{sql connection=dbcon}
-SELECT COUNT(*) AS ProductCount
+SELECT *
 FROM Products
 WHERE LOWER(ProductName) LIKE '%caviar%' OR LOWER(ProductName) LIKE '%kaviar%';
 ```
@@ -112,16 +114,17 @@ WHERE LOWER(ProductName) LIKE '%caviar%' OR LOWER(ProductName) LIKE '%kaviar%';
 ### 8. What is the total number of distinct countries to which at least one order was shipped?
 
 ```{sql connection=dbcon}
+SELECT COUNT(DISTINCT c.Country) AS ShippedCountries
+FROM Orders o
+JOIN Customers c ON o.CustomerID = c.CustomerID;
+```
+
+```{sql connection=dbcon}
 SELECT DISTINCT c.Country AS ShippedCountries
 FROM Orders o
 JOIN Customers c ON o.CustomerID = c.CustomerID
 ORDER BY c.Country
 LIMIT 10;
-```
-```{sql connection=dbcon}
-SELECT COUNT(DISTINCT c.Country) AS ShippedCountries
-FROM Orders o
-JOIN Customers c ON o.CustomerID = c.CustomerID;
 ```
 
 ### 9. What is the total for each order, i.e., the amount that the customers is required to pay for the products at the ordered quantity in the order. List the order ID, the order date, the name of the customer, and the total cost.
@@ -181,12 +184,17 @@ ORDER BY ProductID;
 ### 12. Which product has the most quantity sold?
 
 ```{sql connection=dbcon}
-SELECT od.ProductID, p.ProductName, SUM(od.Quantity) AS Total
-FROM OrderDetails od
-JOIN Products p ON od.ProductID = p.ProductID
-GROUP BY od.ProductID
-ORDER BY Total DESC
-LIMIT 1;
+WITH Product AS (
+  SELECT od.ProductID, p.ProductName, SUM(od.Quantity) AS TotalSold
+  FROM OrderDetails od
+  JOIN Products p ON od.ProductID = p.ProductID
+  GROUP BY od.ProductID
+  ORDER BY TotalSold DESC
+)
+
+SELECT ProductID, ProductName, TotalSold
+FROM Product
+WHERE TotalSold = (SELECT MAX(TotalSold) FROM Product);
 ```
 
 ### 13. What is the total amount spent by all customers who do live in Germany?
@@ -219,27 +227,37 @@ SELECT ((SELECT MAX(TotalSpending) FROM CountrySpending) - (SELECT MIN(TotalSpen
 ### 15. Which country has the most customers, i.e., which country has the most customers living in it?
 
 ```{sql connection=dbcon}
-SELECT c.Country, COUNT(c.CustomerID) AS CustomerCount
-FROM Customers c
-GROUP BY c.Country
-ORDER BY CustomerCount DESC
-LIMIT 1;
+WITH RegionSales AS (
+  SELECT c.Country, COUNT(c.CustomerID) AS CustomerCount
+  FROM Customers c
+  GROUP BY c.Country
+  ORDER BY CustomerCount DESC
+)
+
+SELECT Country, CustomerCount
+FROM RegionSales
+WHERE CustomerCount = (SELECT MAX(CustomerCount) FROM RegionSales);
 ```
 
 ### 16. Which employee sold the most in terms of "dollar amount" sold?
 
 ```{sql connection=dbcon}
-SELECT
-  e.EmployeeID,
-  (CONCAT(e.FirstName, ' ', e.LastName)) AS EmployeeName,
-  SUM(od.Quantity*p.Price) AS Sales
-FROM Employees e
-JOIN Orders o ON e.EmployeeID = o.EmployeeID
-JOIN OrderDetails od ON o.OrderID = od.OrderID
-JOIN Products p ON od.ProductID = p.ProductID
-GROUP BY e.EmployeeID
-ORDER BY Sales DESC
-LIMIT 1;
+WITH EmpSales AS (
+  SELECT
+    e.EmployeeID,
+    (CONCAT(e.FirstName, ' ', e.LastName)) AS EmployeeName,
+    SUM(od.Quantity*p.Price) AS Sales
+  FROM Employees e
+  JOIN Orders o ON e.EmployeeID = o.EmployeeID
+  JOIN OrderDetails od ON o.OrderID = od.OrderID
+  JOIN Products p ON od.ProductID = p.ProductID
+  GROUP BY e.EmployeeID
+  ORDER BY Sales DESC
+)
+
+SELECT EmployeeID, EmployeeName, Sales
+FROM EmpSales
+WHERE Sales = (SELECT MAX(Sales) FROM EmpSales);
 ```
 
 ### 17. Which customers (name and ID) have never bought anything?
@@ -274,14 +292,15 @@ LIMIT 1;
 ### 20. From how many different (unique) countries do the products come from?
 
 ```{sql connection=dbcon}
+SELECT COUNT(DISTINCT s.Country) AS SupplierCountries
+FROM Suppliers s;
+```
+
+```{sql connection=dbcon}
 SELECT DISTINCT(s.Country) AS SupplierCountries
 FROM Suppliers s
 ORDER BY SupplierCountries
 LIMIT 10;
-```
-```{sql connection=dbcon}
-SELECT COUNT(DISTINCT s.Country) AS SupplierCountries
-FROM Suppliers s;
 ```
 
 ```{r}
